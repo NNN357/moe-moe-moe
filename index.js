@@ -32,10 +32,10 @@ function saveSettings() {
 // Generate image using the custom API
 async function generateImage(prompt) {
     console.log(`[Moe Atelier] Generating image for prompt: ${prompt}`);
-    
+
     // Combine prompt with common tags
     const fullPrompt = settings.commonTags ? `${prompt}, ${settings.commonTags}` : prompt;
-    
+
     try {
         const response = await fetch(`${settings.apiUrl}/chat/completions`, {
             method: 'POST',
@@ -60,10 +60,10 @@ async function generateImage(prompt) {
         }
 
         const data = await response.json();
-        
+
         // Extract image URL from various possible response formats
         let imageUrl = null;
-        
+
         // 1. Check data[0].url (OpenAI image format)
         if (data.data && data.data[0] && data.data[0].url) {
             imageUrl = data.data[0].url;
@@ -103,11 +103,11 @@ async function onMessageReceived(messageId) {
 
     const context = getContext();
     const chat = context.chat;
-    
+
     if (!chat || !chat[messageId]) return;
-    
+
     const message = chat[messageId];
-    
+
     // Only process assistant messages or user messages if configured (usually just assistant)
     if (message.is_user) return;
 
@@ -127,16 +127,16 @@ async function onMessageReceived(messageId) {
     for (const match of matches) {
         const fullTag = match[0];
         const prompt = match[1];
-        
+
         // Check if already replaced (in case of re-runs)
         if (updatedMessage.indexOf(fullTag) === -1) continue;
 
         // Generate image
         // Insert a loading placeholder first? For now, we'll just wait.
         // SillyTavern extensions often modify message content directly.
-        
+
         const imageUrl = await generateImage(prompt);
-        
+
         if (imageUrl) {
             const imgTag = `<div class="moe-atelier-image-container"><img src="${imageUrl}" class="moe-atelier-image" alt="${prompt}" title="${prompt}"></div>`;
             updatedMessage = updatedMessage.replace(fullTag, imgTag);
@@ -147,11 +147,11 @@ async function onMessageReceived(messageId) {
     if (modified) {
         // Update the message in chat history
         chat[messageId].mes = updatedMessage;
-        
+
         // Trigger UI update
         // We need to emit MESSAGE_UPDATED to refresh the UI
         eventSource.emit(event_types.MESSAGE_UPDATED, messageId);
-        
+
         // Save chat
         context.saveChat();
         console.log(`[Moe Atelier] Message ${messageId} updated with images`);
@@ -191,111 +191,100 @@ const settingsHtml = `
 `;
 
 // Initialize extension
-function init() {
+async function init() {
     loadSettings();
-    
+
     // Register settings in Extensions menu
-    // Note: SillyTavern usually looks for a specific function or DOM structure
-    // Since we don't have the full specific Extension API typings, we'll use a standard approach
-    // We attach the settings HTML to the extension panel when it's opened.
-    
+    // We try to hook into the UI immediately if it's there
+    injectSettingsUI();
+
+    // Register Slash Command for Settings
+    const context = getContext();
+    if (context.slashCommandParser) {
+        context.slashCommandParser.addCommandObject({
+            name: 'moe_settings',
+            description: 'Open Moe Atelier Settings',
+            callback: (args, value) => {
+                $('#extensions_settings').find('#moe-atelier-settings-container').get(0)?.scrollIntoView();
+                // If using a drawer, we might need to open it first.
+                // For now, let's just log.
+                console.log("Opening settings...");
+                if ($('#extensions_settings').is(':hidden')) {
+                    // Try to trigger the extensions menu click
+                    $('#extensions_menu_button').click();
+                }
+                return "Settings opened in Extensions panel.";
+            }
+        });
+    }
+
     // Add event listener for message received
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
-    
+
     // Log init
     console.log("[Moe Atelier] Extension loaded");
 }
 
-// UI Handling for Settings
-// This function is often called by SillyTavern when the extension settings are opened
-// Check if we need to export it or attach it to window.
-// Based on typical ST extensions, simply exposing an object in the global scope or
-// registering via a known API is common. For this simplified version, we rely on 
-// standard loading mechanisms.
-
-// Actually, to hook into the UI settings, ST extensions typically use jQuery to append to the drawer
-// or use a structured setting definition. Assuming modern ST extension structure:
-
-jQuery(async () => {
-    // Wait for ST to load
-    init();
-
-    // Hook settings button
-    // This part depends heavily on ST version. 
-    // We'll expose a global object for debug/access
-    window.moeAtelier = {
-        settings,
-        generateImage
-    };
-    
-    // Inject Settings UI into the DOM when appropriate
-    // Ideally we would add a button to the Extensions menu
+function injectSettingsUI() {
     const extensionMenu = $("#extensions_settings");
     if (extensionMenu.length) {
-        // Create a container for our settings if it doesn't exist
-        // Note: For a proper implementation, we should use the `slash_commands` or standard UI hooks
-        // But for now, let's assume the user can edit config.json or we inject into the Extension drawer
-        
-        // Simple watcher to inject settings when the drawer is opened
-        const observer = new MutationObserver((mutations) => {
-            if (document.getElementById("moe-atelier-settings-container")) return;
-            
-            const extensionsContent = document.getElementById("extensions_settings");
-            if (extensionsContent && extensionsContent.style.display !== "none") {
-                const container = document.createElement("div");
-                container.id = "moe-atelier-settings-container";
-                container.innerHTML = settingsHtml;
-                extensionsContent.appendChild(container);
-                
-                // Bind inputs
-                const enabledInput = document.getElementById("moe_enabled");
-                const urlInput = document.getElementById("moe_api_url");
-                const keyInput = document.getElementById("moe_api_key");
-                const modelInput = document.getElementById("moe_model");
-                const tagsInput = document.getElementById("moe_common_tags");
-                
-                if(enabledInput) {
-                    enabledInput.checked = settings.enabled;
-                    enabledInput.addEventListener("change", (e) => {
-                        settings.enabled = e.target.checked;
-                        saveSettings();
-                    });
-                }
-                
-                if(urlInput) {
-                    urlInput.value = settings.apiUrl;
-                    urlInput.addEventListener("change", (e) => {
-                        settings.apiUrl = e.target.value;
-                        saveSettings();
-                    });
-                }
-                
-                if(keyInput) {
-                    keyInput.value = settings.apiKey;
-                    keyInput.addEventListener("change", (e) => {
-                        settings.apiKey = e.target.value;
-                        saveSettings();
-                    });
-                }
-                
-                if(modelInput) {
-                    modelInput.value = settings.model;
-                    modelInput.addEventListener("change", (e) => {
-                        settings.model = e.target.value;
-                        saveSettings();
-                    });
-                }
+        // Remove existing if any (for hot reload)
+        $("#moe-atelier-settings-container").remove();
 
-                if(tagsInput) {
-                    tagsInput.value = settings.commonTags;
-                    tagsInput.addEventListener("change", (e) => {
-                        settings.commonTags = e.target.value;
+        const container = document.createElement("div");
+        container.id = "moe-atelier-settings-container";
+        container.innerHTML = settingsHtml;
+        extensionMenu.append(container);
+
+        // Bind inputs
+        // Helper to bind
+        const bind = (id, key) => {
+            const el = document.getElementById(id);
+            if (el) {
+                if (typeof settings[key] === 'boolean') {
+                    el.checked = settings[key];
+                    el.addEventListener("change", (e) => {
+                        settings[key] = e.target.checked;
+                        saveSettings();
+                    });
+                } else {
+                    el.value = settings[key];
+                    el.addEventListener("change", (e) => {
+                        settings[key] = e.target.value;
                         saveSettings();
                     });
                 }
             }
-        });
-        
-        observer.observe(document.body, { childList: true, subtree: true });
+        };
+
+        bind("moe_enabled", "enabled");
+        bind("moe_api_url", "apiUrl");
+        bind("moe_api_key", "apiKey");
+        bind("moe_model", "model");
+        bind("moe_common_tags", "commonTags");
     }
+}
+
+
+jQuery(async () => {
+    // Wait for ST to load
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Slight delay to ensure DOM
+    init();
+
+    // Hook settings button
+    window.moeAtelier = {
+        settings,
+        generateImage
+    };
+
+    // Watch for extension menu being populated/cleared
+    const observer = new MutationObserver((mutations) => {
+        if (!document.getElementById("moe-atelier-settings-container") && $("#extensions_settings").length) {
+            console.log("[Moe Atelier] Re-injecting settings UI");
+            injectSettingsUI();
+        }
+    });
+
+    const target = document.querySelector('#extensions_settings') || document.body;
+    observer.observe(target, { childList: true, subtree: true });
 });
