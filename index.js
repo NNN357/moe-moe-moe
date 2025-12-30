@@ -194,8 +194,10 @@ const settingsHtml = `
 async function init() {
     loadSettings();
 
-    // Register settings in Extensions menu
-    // We try to hook into the UI immediately if it's there
+    // Inject floating UI (fallback for settings menu)
+    injectFloatingUI();
+
+    // Also try to inject into standard menu just in case
     injectSettingsUI();
 
     // Register Slash Command for Settings
@@ -205,15 +207,8 @@ async function init() {
             name: 'moe_settings',
             description: 'Open Moe Atelier Settings',
             callback: (args, value) => {
-                $('#extensions_settings').find('#moe-atelier-settings-container').get(0)?.scrollIntoView();
-                // If using a drawer, we might need to open it first.
-                // For now, let's just log.
-                console.log("Opening settings...");
-                if ($('#extensions_settings').is(':hidden')) {
-                    // Try to trigger the extensions menu click
-                    $('#extensions_menu_button').click();
-                }
-                return "Settings opened in Extensions panel.";
+                toggleSettings(true);
+                return "Settings opened.";
             }
         });
     }
@@ -221,26 +216,63 @@ async function init() {
     // Add event listener for message received
     eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
 
-    // Log init
-    console.log("[Moe Atelier] Extension loaded");
+    console.log("[Moe Atelier] Extension loaded with Floating UI");
 }
 
-function injectSettingsUI() {
-    const extensionMenu = $("#extensions_settings");
-    if (extensionMenu.length) {
-        // Remove existing if any (for hot reload)
-        $("#moe-atelier-settings-container").remove();
+function toggleSettings(show) {
+    const overlay = document.getElementById('moe-settings-overlay');
+    if (!overlay) return;
 
-        const container = document.createElement("div");
-        container.id = "moe-atelier-settings-container";
-        container.innerHTML = settingsHtml;
-        extensionMenu.append(container);
+    if (show === undefined) {
+        // Toggle
+        overlay.style.display = overlay.style.display === 'none' ? 'flex' : 'none';
+    } else {
+        overlay.style.display = show ? 'flex' : 'none';
+    }
+}
 
-        // Bind inputs
-        // Helper to bind
+function injectFloatingUI() {
+    // Remove existing
+    $("#moe-floating-btn").remove();
+    $("#moe-settings-overlay").remove();
+
+    // Create Floating Button
+    const btn = document.createElement('div');
+    btn.id = 'moe-floating-btn';
+    btn.innerHTML = '🎨'; // Art palette emoji
+    btn.title = 'Moe Atelier Settings';
+    btn.onclick = () => toggleSettings();
+    document.body.appendChild(btn);
+
+    // Create Modal Overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'moe-settings-overlay';
+    overlay.style.display = 'none';
+
+    const modal = document.createElement('div');
+    modal.id = 'moe-settings-modal';
+
+    // Close button
+    const closeBtn = document.createElement('div');
+    closeBtn.id = 'moe-settings-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.onclick = () => toggleSettings(false);
+
+    modal.appendChild(closeBtn);
+
+    // Content Container
+    const content = document.createElement('div');
+    content.innerHTML = settingsHtml;
+    modal.appendChild(content);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Bind inputs immediately for the modal
+    setTimeout(() => {
         const bind = (id, key) => {
-            const el = document.getElementById(id);
-            if (el) {
+            const els = document.querySelectorAll(`#${id}`);
+            els.forEach(el => {
                 if (typeof settings[key] === 'boolean') {
                     el.checked = settings[key];
                     el.addEventListener("change", (e) => {
@@ -254,7 +286,7 @@ function injectSettingsUI() {
                         saveSettings();
                     });
                 }
-            }
+            });
         };
 
         bind("moe_enabled", "enabled");
@@ -262,25 +294,39 @@ function injectSettingsUI() {
         bind("moe_api_key", "apiKey");
         bind("moe_model", "model");
         bind("moe_common_tags", "commonTags");
+    }, 100);
+
+    // Close on click outside
+    overlay.onclick = (e) => {
+        if (e.target === overlay) toggleSettings(false);
+    };
+}
+
+function injectSettingsUI() {
+    const extensionMenu = $("#extensions_settings");
+    if (extensionMenu.length) {
+        $("#moe-atelier-settings-container").remove();
+        const container = document.createElement("div");
+        container.id = "moe-atelier-settings-container";
+        container.innerHTML = settingsHtml;
+        extensionMenu.append(container);
     }
 }
 
 
 jQuery(async () => {
     // Wait for ST to load
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Slight delay to ensure DOM
+    await new Promise(resolve => setTimeout(resolve, 1000));
     init();
 
-    // Hook settings button
     window.moeAtelier = {
         settings,
-        generateImage
+        generateImage,
+        toggleSettings
     };
 
-    // Watch for extension menu being populated/cleared
     const observer = new MutationObserver((mutations) => {
         if (!document.getElementById("moe-atelier-settings-container") && $("#extensions_settings").length) {
-            console.log("[Moe Atelier] Re-injecting settings UI");
             injectSettingsUI();
         }
     });
