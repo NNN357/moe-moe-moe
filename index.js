@@ -12,7 +12,6 @@ let settings = defaultSettings;
 
 // Helper to find globals
 function getSTGlobal(name) {
-    // Check standard global
     if (window[name]) return window[name];
     if (window.SillyTavern && window.SillyTavern[name]) return window.SillyTavern[name];
     return null;
@@ -149,6 +148,9 @@ const settingsHtml = `
     <div class="moe-atelier-setting-item"><label>API Key</label><input type="password" id="moe_api_key" /></div>
     <div class="moe-atelier-setting-item"><label>Model</label><input type="text" id="moe_model" /></div>
     <div class="moe-atelier-setting-item"><label>Tags</label><input type="text" id="moe_common_tags" /></div>
+    <div class="moe-atelier-setting-item" style="margin-top:15px; border-top: 1px solid rgba(255,255,255,0.2); paddingTop: 10px;">
+        <button id="moe_test_btn" class="menu_button">Test Connection & Generate</button>
+    </div>
 </div>`;
 
 // UI Logic
@@ -169,11 +171,36 @@ function injectFloatingUI() {
     $('body').append(btn);
 
     const overlay = $(`<div id="moe-settings-overlay" style="display:none"><div id="moe-settings-modal"><div id="moe-settings-close">&times;</div>${settingsHtml}</div></div>`);
+
+    // Wire up events
     overlay.find('#moe-settings-close').on('click', () => toggleSettings(false));
     overlay.on('click', (e) => { if (e.target.id === 'moe-settings-overlay') toggleSettings(false); });
+
+    // Test Button
+    overlay.find('#moe_test_btn').on('click', async function () {
+        const btn = $(this);
+        const originalText = btn.text();
+        btn.text("Testing...").prop('disabled', true);
+
+        try {
+            if (window.toastr) window.toastr.info("Sending test request...", "Moe Atelier");
+            const url = await generateImage("cute anime girl chibi test");
+            if (url) {
+                if (window.toastr) window.toastr.success("Test Successful! Opening image...", "Moe Atelier");
+                window.open(url, '_blank');
+            } else {
+                alert("Test Failed: API returned no image.");
+            }
+        } catch (e) {
+            alert("Test Failed: " + e.message);
+        } finally {
+            btn.text(originalText).prop('disabled', false);
+        }
+    });
+
     $('body').append(overlay);
 
-    // Bindings
+    // Bindings with slight delay
     setTimeout(() => {
         const bind = (id, key) => {
             $(`#${id}`).each(function () {
@@ -181,7 +208,7 @@ function injectFloatingUI() {
                     this.checked = settings[key];
                     $(this).on('change', function () { settings[key] = this.checked; saveSettings(); });
                 } else {
-                    this.val = settings[key]; // jquery val
+                    this.val = settings[key];
                     this.value = settings[key];
                     $(this).on('change', function () { settings[key] = this.value; saveSettings(); });
                 }
@@ -199,13 +226,11 @@ function injectFloatingUI() {
 jQuery(async () => {
     console.log("[Moe Atelier] Initializing Zero-Dependency Mode");
 
-    // Wait slightly
     await new Promise(r => setTimeout(r, 1000));
 
     loadSettings();
     injectFloatingUI();
 
-    // Register slash command if possible
     const context = getContext();
     if (context && context.slashCommandParser) {
         context.slashCommandParser.addCommandObject({
@@ -219,7 +244,6 @@ jQuery(async () => {
         eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
     }
 
-    // Global Access
     window.moeAtelier = { settings, generateImage, toggleSettings };
     console.log("[Moe Atelier] Ready!");
 });
