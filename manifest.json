@@ -1,0 +1,9 @@
+{
+    "display_name": "Moe Atelier",
+    "loading_order": 100,
+    "js": "index.js",
+    "css": "style.css",
+    "author": "GamerMitsuha & Antigravity",
+    "version": "1.0.0",
+    "homePage": "https://github.com/ruoyun/moe-atelier"
+}

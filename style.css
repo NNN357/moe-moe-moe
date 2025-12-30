@@ -1,0 +1,80 @@
+/* Moe Atelier Extension Styles */
+
+/* Settings Panel */
+.moe-atelier-settings {
+    background-color: var(--black70a);
+    padding: 10px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.moe-atelier-settings h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--white30a);
+    padding-bottom: 5px;
+}
+
+.moe-atelier-setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 5px;
+}
+
+.moe-atelier-setting-item label {
+    flex: 1;
+}
+
+.moe-atelier-setting-item input[type="text"],
+.moe-atelier-setting-item input[type="password"] {
+    flex: 2;
+    background-color: var(--black50a);
+    border: 1px solid var(--white30a);
+    color: var(--smart-theme-body-color);
+    padding: 5px;
+    border-radius: 5px;
+}
+
+/* Generated Images */
+.moe-atelier-image-container {
+    margin: 10px 0;
+    position: relative;
+    display: inline-block;
+}
+
+.moe-atelier-image {
+    max-width: 100%;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.moe-atelier-image:hover {
+    transform: scale(1.01);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Loading Indicator */
+.moe-atelier-loading {
+    display: inline-block;
+    padding: 10px 20px;
+    background: var(--black50a);
+    border-radius: 20px;
+    color: var(--smart-theme-body-color);
+    font-style: italic;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+/* Toast Notification Override */
+#toast-container > .toast-success {
+    background-color: #51a351;
+}
