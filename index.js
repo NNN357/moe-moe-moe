@@ -85,7 +85,8 @@ async function onMessageReceived(messageId) {
 
         const imageUrl = await generateImage(prompt);
         if (imageUrl) {
-            const imgTag = `<div class="moe-atelier-image-container"><img src="${imageUrl}" class="moe-atelier-image" alt="${prompt}" title="${prompt}"></div>`;
+            // Use Markdown syntax for robustness
+            const imgTag = `\n\n![${prompt}](${imageUrl})\n`;
             updatedMessage = updatedMessage.replace(fullTag, imgTag);
             modified = true;
         }
