@@ -98,13 +98,23 @@ async function onMessageReceived(messageId) {
     }
 }
 
+// Helper to clean URL
+function sanitizeUrl(url) {
+    return url.replace(/\/$/, ""); // Remove trailing slash
+}
+
 // Generate Image
 async function generateImage(prompt) {
     console.log(`[Moe Atelier] Generating image for prompt: ${prompt}`);
     const fullPrompt = settings.commonTags ? `${prompt}, ${settings.commonTags}` : prompt;
 
+    const baseUrl = sanitizeUrl(settings.apiUrl);
+    const endpoint = `${baseUrl}/chat/completions`;
+
+    console.log(`[Moe Atelier] Requesting: ${endpoint}`);
+
     try {
-        const response = await fetch(`${settings.apiUrl}/chat/completions`, {
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -117,9 +127,24 @@ async function generateImage(prompt) {
             })
         });
 
-        if (!response.ok) throw new Error(`API Error: ${response.status}`);
-        const data = await response.json();
+        // Read text first to debug non-JSON responses
+        const textResponse = await response.text();
 
+        if (!response.ok) {
+            console.error('[Moe Atelier] API Error Body:', textResponse);
+            throw new Error(`API Error (${response.status}): ${textResponse.substring(0, 100)}`);
+        }
+
+        let data;
+        try {
+            data = JSON.parse(textResponse);
+        } catch (e) {
+            console.error('[Moe Atelier] JSON Parse Error. Request:', endpoint);
+            console.error('[Moe Atelier] Response Body:', textResponse);
+            throw new Error(`Invalid JSON from API: ${textResponse.substring(0, 50)}...`);
+        }
+
+        // Extract Image
         let imageUrl = null;
         if (data.data && data.data[0] && data.data[0].url) imageUrl = data.data[0].url;
         else if (data.data && data.data[0] && data.data[0].b64_json) imageUrl = `data:image/png;base64,${data.data[0].b64_json}`;
@@ -130,11 +155,15 @@ async function generateImage(prompt) {
             else if (content.startsWith('http') || content.startsWith('data:image')) imageUrl = content;
         }
 
-        if (!imageUrl) throw new Error('No image found in API response');
+        if (!imageUrl) {
+            console.warn('[Moe Atelier] No image found in response:', data);
+            throw new Error('No image found in API response');
+        }
         return imageUrl;
+
     } catch (error) {
         console.error('[Moe Atelier] Image generation failed:', error);
-        if (window.toastr) window.toastr.error(`Image generation failed: ${error.message}`, "Moe Atelier");
+        if (window.toastr) window.toastr.error(`Error: ${error.message}`, "Moe Atelier Error");
         return null;
     }
 }
@@ -144,7 +173,10 @@ const settingsHtml = `
 <div class="moe-atelier-settings">
     <h3>Moe Atelier Settings</h3>
     <div class="moe-atelier-setting-item"><label>Enable</label><input type="checkbox" id="moe_enabled" /></div>
-    <div class="moe-atelier-setting-item"><label>API URL</label><input type="text" id="moe_api_url" /></div>
+    <div class="moe-atelier-setting-item">
+        <label>API URL <small>(e.g. https://ruoyun.icu/v1)</small></label>
+        <input type="text" id="moe_api_url" />
+    </div>
     <div class="moe-atelier-setting-item"><label>API Key</label><input type="password" id="moe_api_key" /></div>
     <div class="moe-atelier-setting-item"><label>Model</label><input type="text" id="moe_model" /></div>
     <div class="moe-atelier-setting-item"><label>Tags</label><input type="text" id="moe_common_tags" /></div>
@@ -188,11 +220,11 @@ function injectFloatingUI() {
             if (url) {
                 if (window.toastr) window.toastr.success("Test Successful! Opening image...", "Moe Atelier");
                 window.open(url, '_blank');
-            } else {
-                alert("Test Failed: API returned no image.");
             }
+            // Error handled in generateImage
         } catch (e) {
-            alert("Test Failed: " + e.message);
+            // Should be caught in generateImage, but just in case
+            alert("Unexpected Error: " + e.message);
         } finally {
             btn.text(originalText).prop('disabled', false);
         }
@@ -224,7 +256,7 @@ function injectFloatingUI() {
 
 // Initialization
 jQuery(async () => {
-    console.log("[Moe Atelier] Initializing Zero-Dependency Mode");
+    console.log("[Moe Atelier] Initializing Improved Version");
 
     await new Promise(r => setTimeout(r, 1000));
 
