@@ -67,20 +67,34 @@ async function onMessageReceived(messageId) {
     const message = chat[messageId];
     if (message.is_user) return;
 
-    const promptRegex = /<!--img-prompt="([^"]+)"-->/g;
+    // Verbose logging for debugging
+    console.log(`[Moe Atelier] Inspecting message ${messageId}:`, message.mes);
+
+    // Flexible Regex:
+    // 1. Matches <!-- with optional spaces
+    // 2. Matches img-prompt with optional spaces/equals
+    // 3. Captures content inside "..." or '...'
+    const promptRegex = /<!--\s*img-prompt\s*=\s*(["'])(.*?)\1\s*-->/g;
+
+    // transform iterator to array
     const matches = [...message.mes.matchAll(promptRegex)];
 
-    if (matches.length === 0) return;
+    if (matches.length === 0) {
+        console.log("[Moe Atelier] No image tags found in this message.");
+        return;
+    }
 
-    console.log(`[Moe Atelier] Found ${matches.length} image prompts in message ${messageId}`);
-    if (window.toastr) window.toastr.info(`Generating ${matches.length} image(s)...`, "Moe Atelier");
+    console.log(`[Moe Atelier] Found ${matches.length} image prompts.`);
+    if (window.toastr) window.toastr.info(`Found ${matches.length} image prompt(s). Generating...`, "Moe Atelier");
 
     let updatedMessage = message.mes;
     let modified = false;
 
     for (const match of matches) {
         const fullTag = match[0];
-        const prompt = match[1];
+        const quoteType = match[1]; // " or '
+        const prompt = match[2];    // The actual prompt text
+
         if (updatedMessage.indexOf(fullTag) === -1) continue;
 
         const imageUrl = await generateImage(prompt);
