@@ -1,8 +1,8 @@
 // Moe Atelier Extension - Zero Dependency Version
 const extensionName = "moe-atelier";
 const defaultSettings = {
-    apiUrl: "https://ruoyun.icu/v1",
-    apiKey: "sk-VJogWtM15QFkvMWMMU4N82QnrTjdguXKIYQHKuPyUCGtxAfS",
+    apiUrl: "https://sunlea.de/v1",
+    apiKey: "sk-KrGGCsZ8citRzyvcfuNJJqfYJKwVJBCDCTSSsyFBKmr5C0rn",
     model: "gemini-3-pro-image-preview",
     enabled: true,
     commonTags: "masterpiece, best quality"
@@ -128,6 +128,10 @@ async function generateImage(prompt) {
 
     console.log(`[Moe Atelier] Requesting: ${endpoint}`);
 
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
     try {
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -139,8 +143,11 @@ async function generateImage(prompt) {
                 model: settings.model,
                 messages: [{ role: "user", content: fullPrompt }],
                 stream: false
-            })
+            }),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         // Read text first to debug non-JSON responses
         const textResponse = await response.text();
@@ -177,8 +184,15 @@ async function generateImage(prompt) {
         return imageUrl;
 
     } catch (error) {
+        clearTimeout(timeoutId);
         console.error('[Moe Atelier] Image generation failed:', error);
-        if (window.toastr) window.toastr.error(`Error: ${error.message}`, "Moe Atelier Error");
+
+        let errorMessage = error.message;
+        if (error.name === 'AbortError') {
+            errorMessage = "Connection timed out (30s). Please check your API URL or try again later.";
+        }
+
+        if (window.toastr) window.toastr.error(`Error: ${errorMessage}`, "Moe Atelier Error");
         return null;
     }
 }
@@ -189,7 +203,7 @@ const settingsHtml = `
     <h3>Moe Atelier Settings</h3>
     <div class="moe-atelier-setting-item"><label>Enable</label><input type="checkbox" id="moe_enabled" /></div>
     <div class="moe-atelier-setting-item">
-        <label>API URL <small>(e.g. https://ruoyun.icu/v1)</small></label>
+        <label>API URL <small>(e.g. https://run.mocky.io/v3/YOUR_ID)</small></label>
         <input type="text" id="moe_api_url" />
     </div>
     <div class="moe-atelier-setting-item"><label>API Key</label><input type="password" id="moe_api_key" /></div>
