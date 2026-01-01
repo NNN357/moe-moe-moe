@@ -123,16 +123,31 @@
 }
 
 #moe-settings-modal {
-    background-color: var(--smart-theme-bg);
+    background-color: var(--smart-theme-bg, #1a1a2e);
     padding: 20px;
     border-radius: 10px;
     width: 90%;
     max-width: 500px;
-    border: 1px solid var(--white30a);
+    border: 1px solid var(--white30a, rgba(255,255,255,0.3));
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     position: relative;
-    max-height: 80vh;
+    max-height: 85vh;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--smart-theme-color, #6c5ce7) transparent;
+}
+
+#moe-settings-modal::-webkit-scrollbar {
+    width: 8px;
+}
+
+#moe-settings-modal::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#moe-settings-modal::-webkit-scrollbar-thumb {
+    background-color: var(--smart-theme-color, #6c5ce7);
+    border-radius: 4px;
 }
 
 #moe-settings-close {
@@ -269,10 +284,35 @@
 }
 
 .moe-atelier-settings h4 {
-    margin: 0 0 10px 0;
+    margin: 15px 0 10px 0;
+    padding-top: 10px;
     font-size: 14px;
-    color: var(--smart-theme-body-color);
+    color: var(--smart-theme-body-color, #e0e0e0);
     opacity: 0.9;
+    border-top: 1px solid var(--white30a, rgba(255,255,255,0.2));
+}
+
+/* Compact setting items */
+.moe-atelier-setting-item {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 5px;
+    gap: 8px;
+}
+
+.moe-atelier-setting-item label {
+    flex: 1;
+    min-width: 120px;
+    font-size: 13px;
+}
+
+.moe-atelier-setting-item label small {
+    display: block;
+    font-size: 10px;
+    opacity: 0.7;
 }
 
 /* Generated Image Click to Expand */
