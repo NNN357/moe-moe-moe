@@ -130,12 +130,23 @@ function injectImageButtons() {
     const context = getContext();
     if (!context || !context.chat) return;
 
-    // Find all AI message elements
-    const messageElements = document.querySelectorAll('.mes[is_user="false"]');
+    // Find all message elements - try multiple selectors for compatibility
+    const messageElements = document.querySelectorAll('.mes');
     
     messageElements.forEach((messageEl) => {
         const messageId = messageEl.getAttribute('mesid');
-        if (!messageId || injectedButtons.has(messageId)) return;
+        if (!messageId) return;
+        
+        // Check if this is an AI message (not user)
+        const isUser = messageEl.getAttribute('is_user');
+        // SillyTavern uses "true"/"false" or "0"/"1" depending on version
+        if (isUser === 'true' || isUser === '1' || isUser === true) return;
+        
+        // Also check the chat data
+        const msgIndex = parseInt(messageId);
+        if (context.chat[msgIndex] && context.chat[msgIndex].is_user) return;
+        
+        if (injectedButtons.has(messageId)) return;
 
         if (settings.buttonPosition === 'floating') {
             // Floating button on message
@@ -146,21 +157,35 @@ function injectImageButtons() {
         }
         
         injectedButtons.add(messageId);
+        console.log(`[Moe Atelier] Injected button for message ${messageId}`);
     });
 }
 
 // Inject button into action bar
 function injectActionBarButton(messageEl, messageId) {
-    // Find the action bar (extraMesButtons or mes_buttons)
+    // Find the action bar - try multiple selectors for compatibility
     let actionBar = messageEl.querySelector('.extraMesButtons');
     if (!actionBar) {
         actionBar = messageEl.querySelector('.mes_buttons');
     }
+    if (!actionBar) {
+        actionBar = messageEl.querySelector('.mes_block .ch_name + div');
+    }
+    if (!actionBar) {
+        // Try to find any button container in the message
+        actionBar = messageEl.querySelector('[class*="button"]');
+    }
     
-    if (!actionBar) return;
+    // If still no action bar, create floating button instead
+    if (!actionBar) {
+        console.log(`[Moe Atelier] No action bar found for message ${messageId}, using floating button`);
+        injectFloatingButton(messageEl, messageId);
+        return;
+    }
 
     // Check if button already exists
     if (actionBar.querySelector('.moe-generate-btn')) return;
+    if (messageEl.querySelector('.moe-generate-btn')) return;
 
     // Create the generate button
     const generateBtn = document.createElement('div');
