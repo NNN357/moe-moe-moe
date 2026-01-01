@@ -5,8 +5,16 @@ const defaultSettings = {
     apiKey: "sk-KrGGCsZ8citRzyvcfuNJJqfYJKwVJBCDCTSSsyFBKmr5C0rn",
     model: "gemini-3-pro-image-preview",
     enabled: true,
-    commonTags: "masterpiece, best quality"
+    commonTags: "masterpiece, best quality",
+    // New settings for manual generation button
+    generationMode: "direct", // "direct" or "smart"
+    autoGenerate: false, // Auto-generate for every AI message
+    buttonPosition: "action_bar", // "action_bar" or "floating"
+    showButtonAlways: false // Show button always or only on hover
 };
+
+// Track which messages have buttons injected
+const injectedButtons = new Set();
 
 let settings = defaultSettings;
 
@@ -113,6 +121,257 @@ async function onMessageReceived(messageId) {
     }
 }
 
+// ==========================================
+// MANUAL GENERATION BUTTON FEATURE
+// ==========================================
+
+// Inject image generation buttons to AI messages
+function injectImageButtons() {
+    const context = getContext();
+    if (!context || !context.chat) return;
+
+    // Find all AI message elements
+    const messageElements = document.querySelectorAll('.mes[is_user="false"]');
+    
+    messageElements.forEach((messageEl) => {
+        const messageId = messageEl.getAttribute('mesid');
+        if (!messageId || injectedButtons.has(messageId)) return;
+
+        if (settings.buttonPosition === 'floating') {
+            // Floating button on message
+            injectFloatingButton(messageEl, messageId);
+        } else {
+            // Action bar button (default)
+            injectActionBarButton(messageEl, messageId);
+        }
+        
+        injectedButtons.add(messageId);
+    });
+}
+
+// Inject button into action bar
+function injectActionBarButton(messageEl, messageId) {
+    // Find the action bar (extraMesButtons or mes_buttons)
+    let actionBar = messageEl.querySelector('.extraMesButtons');
+    if (!actionBar) {
+        actionBar = messageEl.querySelector('.mes_buttons');
+    }
+    
+    if (!actionBar) return;
+
+    // Check if button already exists
+    if (actionBar.querySelector('.moe-generate-btn')) return;
+
+    // Create the generate button
+    const generateBtn = document.createElement('div');
+    generateBtn.className = 'moe-generate-btn mes_button fa-solid fa-image interactable';
+    if (settings.showButtonAlways) {
+        generateBtn.classList.add('moe-always-visible');
+    }
+    generateBtn.title = 'Generate Image (Moe Atelier)';
+    generateBtn.setAttribute('data-mesid', messageId);
+    
+    // Add click handler
+    generateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onGenerateButtonClick(parseInt(messageId));
+    });
+
+    // Insert button at the beginning of action bar
+    actionBar.insertBefore(generateBtn, actionBar.firstChild);
+}
+
+// Inject floating button on message
+function injectFloatingButton(messageEl, messageId) {
+    // Check if button already exists
+    if (messageEl.querySelector('.moe-floating-generate-btn')) return;
+
+    // Create the floating generate button
+    const generateBtn = document.createElement('div');
+    generateBtn.className = 'moe-floating-generate-btn';
+    if (settings.showButtonAlways) {
+        generateBtn.classList.add('moe-always-visible');
+    }
+    generateBtn.innerHTML = '🖼️';
+    generateBtn.title = 'Generate Image (Moe Atelier)';
+    generateBtn.setAttribute('data-mesid', messageId);
+    
+    // Add click handler
+    generateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onGenerateButtonClick(parseInt(messageId));
+    });
+
+    // Find message text container and append
+    const mesBlock = messageEl.querySelector('.mes_block');
+    if (mesBlock) {
+        mesBlock.style.position = 'relative';
+        mesBlock.appendChild(generateBtn);
+    }
+}
+
+// Handle generate button click
+async function onGenerateButtonClick(messageId) {
+    const context = getContext();
+    if (!context || !context.chat) return;
+
+    const message = context.chat[messageId];
+    if (!message || message.is_user) return;
+
+    // Get the message element
+    const messageEl = document.querySelector(`.mes[mesid="${messageId}"]`);
+    if (!messageEl) return;
+
+    // Show loading state
+    const generateBtn = messageEl.querySelector('.moe-generate-btn');
+    if (generateBtn) {
+        generateBtn.classList.add('moe-generating');
+        generateBtn.classList.remove('fa-image');
+        generateBtn.classList.add('fa-spinner', 'fa-spin');
+    }
+
+    // Add loading indicator to message
+    const mesText = messageEl.querySelector('.mes_text');
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'moe-atelier-loading';
+    loadingIndicator.innerHTML = '🎨 Generating image...';
+    if (mesText) mesText.appendChild(loadingIndicator);
+
+    try {
+        // Extract prompt based on generation mode
+        let prompt;
+        if (settings.generationMode === 'smart') {
+            prompt = await extractSmartPrompt(message.mes);
+        } else {
+            prompt = extractDirectPrompt(message.mes);
+        }
+
+        if (!prompt) {
+            throw new Error('Could not extract prompt from message');
+        }
+
+        console.log(`[Moe Atelier] Generating image with prompt: ${prompt}`);
+        if (window.toastr) window.toastr.info('Generating image...', 'Moe Atelier');
+
+        // Generate the image
+        const imageUrl = await generateImage(prompt);
+
+        if (imageUrl) {
+            // Append image to message
+            const imgTag = `\n\n![Generated Image](${imageUrl})\n`;
+            context.chat[messageId].mes += imgTag;
+            
+            // Update the DOM
+            if (eventSource) eventSource.emit(event_types.MESSAGE_UPDATED, messageId);
+            
+            // Save chat
+            context.saveChat();
+            
+            if (window.toastr) window.toastr.success('Image generated successfully!', 'Moe Atelier');
+        }
+    } catch (error) {
+        console.error('[Moe Atelier] Manual generation failed:', error);
+        if (window.toastr) window.toastr.error(`Error: ${error.message}`, 'Moe Atelier');
+    } finally {
+        // Remove loading state
+        if (generateBtn) {
+            generateBtn.classList.remove('moe-generating', 'fa-spinner', 'fa-spin');
+            generateBtn.classList.add('fa-image');
+        }
+        if (loadingIndicator && loadingIndicator.parentNode) {
+            loadingIndicator.parentNode.removeChild(loadingIndicator);
+        }
+    }
+}
+
+// Direct mode: Clean and use message text as prompt
+function extractDirectPrompt(messageText) {
+    // Remove HTML tags
+    let text = messageText.replace(/<[^>]*>/g, '');
+    // Remove markdown images
+    text = text.replace(/!\[.*?\]\(.*?\)/g, '');
+    // Remove existing img-prompt tags
+    text = text.replace(/<!--\s*img-prompt\s*=\s*["'].*?["']\s*-->/g, '');
+    // Clean up whitespace
+    text = text.replace(/\s+/g, ' ').trim();
+    // Truncate if too long (max 500 chars for prompt)
+    if (text.length > 500) {
+        text = text.substring(0, 500) + '...';
+    }
+    return text;
+}
+
+// Smart mode: Use LLM to summarize message into visual description
+async function extractSmartPrompt(messageText) {
+    const cleanText = extractDirectPrompt(messageText);
+    
+    const baseUrl = sanitizeUrl(settings.apiUrl);
+    const endpoint = `${baseUrl}/chat/completions`;
+
+    const systemPrompt = `You are a visual description assistant. Given a text passage, extract and summarize the key visual elements into a concise image generation prompt. Focus on:
+- Characters and their appearance (hair, eyes, clothing, pose)
+- Setting and environment
+- Mood and atmosphere
+- Key actions or expressions
+
+Output ONLY the image prompt, nothing else. Keep it under 200 words. Use comma-separated tags style.`;
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${settings.apiKey}`
+            },
+            body: JSON.stringify({
+                model: settings.model,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: `Extract visual description from this text:\n\n${cleanText}` }
+                ],
+                stream: false
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+            return data.choices[0].message.content.trim();
+        }
+        
+        // Fallback to direct mode
+        return cleanText;
+    } catch (error) {
+        console.warn('[Moe Atelier] Smart prompt extraction failed, falling back to direct mode:', error);
+        return cleanText;
+    }
+}
+
+// Auto-generate for new messages if enabled
+async function onMessageReceivedAutoGenerate(messageId) {
+    if (!settings.enabled || !settings.autoGenerate) return;
+
+    const context = getContext();
+    if (!context || !context.chat) return;
+
+    const message = context.chat[messageId];
+    if (!message || message.is_user) return;
+
+    // Small delay to let the message render
+    await new Promise(r => setTimeout(r, 500));
+    
+    // Inject buttons first
+    injectImageButtons();
+    
+    // Then auto-generate
+    await onGenerateButtonClick(messageId);
+}
+
 // Helper to clean URL
 function sanitizeUrl(url) {
     return url.replace(/\/$/, ""); // Remove trailing slash
@@ -209,7 +468,32 @@ const settingsHtml = `
     <div class="moe-atelier-setting-item"><label>API Key</label><input type="password" id="moe_api_key" /></div>
     <div class="moe-atelier-setting-item"><label>Model</label><input type="text" id="moe_model" /></div>
     <div class="moe-atelier-setting-item"><label>Tags</label><input type="text" id="moe_common_tags" /></div>
-    <div class="moe-atelier-setting-item" style="margin-top:15px; border-top: 1px solid rgba(255,255,255,0.2); paddingTop: 10px;">
+    
+    <h4 style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 10px;">🖼️ Manual Generation</h4>
+    <div class="moe-atelier-setting-item">
+        <label>Generation Mode</label>
+        <select id="moe_generation_mode">
+            <option value="direct">Direct (use message text)</option>
+            <option value="smart">Smart (LLM summarizes)</option>
+        </select>
+    </div>
+    <div class="moe-atelier-setting-item">
+        <label>Auto-generate for all AI messages</label>
+        <input type="checkbox" id="moe_auto_generate" />
+    </div>
+    <div class="moe-atelier-setting-item">
+        <label>Button Position</label>
+        <select id="moe_button_position">
+            <option value="action_bar">Action Bar</option>
+            <option value="floating">Floating on Message</option>
+        </select>
+    </div>
+    <div class="moe-atelier-setting-item">
+        <label>Always show button (not just on hover)</label>
+        <input type="checkbox" id="moe_show_button_always" />
+    </div>
+    
+    <div class="moe-atelier-setting-item" style="margin-top:15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 10px;">
         <button id="moe_test_btn" class="menu_button">Test Connection & Generate</button>
     </div>
 </div>`;
@@ -280,12 +564,36 @@ function injectFloatingUI() {
         bind("moe_api_key", "apiKey");
         bind("moe_model", "model");
         bind("moe_common_tags", "commonTags");
+        
+        // New settings bindings
+        bind("moe_auto_generate", "autoGenerate");
+        bind("moe_show_button_always", "showButtonAlways");
+        
+        // Select bindings (special handling)
+        const bindSelect = (id, key) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.value = settings[key];
+                el.addEventListener('change', function() {
+                    settings[key] = this.value;
+                    saveSettings();
+                    // Re-inject buttons if position changed
+                    if (key === 'buttonPosition') {
+                        injectedButtons.clear();
+                        document.querySelectorAll('.moe-generate-btn, .moe-floating-generate-btn').forEach(btn => btn.remove());
+                        injectImageButtons();
+                    }
+                });
+            }
+        };
+        bindSelect("moe_generation_mode", "generationMode");
+        bindSelect("moe_button_position", "buttonPosition");
     }, 500);
 }
 
 // Initialization
 jQuery(async () => {
-    console.log("[Moe Atelier] Initializing Improved Version");
+    console.log("[Moe Atelier] Initializing v1.1.0 with Manual Generation Button");
 
     await new Promise(r => setTimeout(r, 1000));
 
@@ -299,12 +607,68 @@ jQuery(async () => {
             description: 'Open Moe Atelier Settings',
             callback: () => { toggleSettings(true); return "Opened settings."; }
         });
+        
+        // Add slash command for manual generation
+        context.slashCommandParser.addCommandObject({
+            name: 'moe_generate',
+            description: 'Generate image for the last AI message',
+            callback: async () => {
+                const ctx = getContext();
+                if (!ctx || !ctx.chat || ctx.chat.length === 0) {
+                    return "No messages found.";
+                }
+                // Find last AI message
+                for (let i = ctx.chat.length - 1; i >= 0; i--) {
+                    if (!ctx.chat[i].is_user) {
+                        await onGenerateButtonClick(i);
+                        return "Generating image...";
+                    }
+                }
+                return "No AI message found.";
+            }
+        });
     }
 
     if (eventSource && event_types) {
+        // Original tag-based generation
         eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
+        
+        // Auto-generate if enabled
+        eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceivedAutoGenerate);
+        
+        // Inject buttons when messages are updated/rendered
+        eventSource.on(event_types.MESSAGE_RECEIVED, () => {
+            setTimeout(injectImageButtons, 100);
+        });
+        eventSource.on(event_types.MESSAGE_UPDATED, () => {
+            setTimeout(injectImageButtons, 100);
+        });
     }
 
-    window.moeAtelier = { settings, generateImage, toggleSettings };
-    console.log("[Moe Atelier] Ready!");
+    // Initial button injection for existing messages
+    setTimeout(injectImageButtons, 1500);
+    
+    // Also inject on chat load/switch (using MutationObserver as fallback)
+    const chatObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            if (mutation.addedNodes.length > 0) {
+                setTimeout(injectImageButtons, 100);
+                break;
+            }
+        }
+    });
+    
+    const chatContainer = document.getElementById('chat');
+    if (chatContainer) {
+        chatObserver.observe(chatContainer, { childList: true, subtree: true });
+    }
+
+    window.moeAtelier = {
+        settings,
+        generateImage,
+        toggleSettings,
+        injectImageButtons,
+        onGenerateButtonClick
+    };
+    console.log("[Moe Atelier] Ready with Manual Generation Button!");
 });

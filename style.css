@@ -123,16 +123,31 @@
 }
 
 #moe-settings-modal {
-    background-color: var(--smart-theme-bg);
+    background-color: var(--smart-theme-bg, #1a1a2e);
     padding: 20px;
     border-radius: 10px;
     width: 90%;
     max-width: 500px;
-    border: 1px solid var(--white30a);
+    border: 1px solid var(--white30a, rgba(255,255,255,0.3));
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
     position: relative;
-    max-height: 80vh;
+    max-height: 85vh;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--smart-theme-color, #6c5ce7) transparent;
+}
+
+#moe-settings-modal::-webkit-scrollbar {
+    width: 8px;
+}
+
+#moe-settings-modal::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#moe-settings-modal::-webkit-scrollbar-thumb {
+    background-color: var(--smart-theme-color, #6c5ce7);
+    border-radius: 4px;
 }
 
 #moe-settings-close {
@@ -148,4 +163,165 @@
     background-color: transparent;
     padding: 0;
     border-radius: 0;
+}
+
+/* ==========================================
+   MANUAL GENERATION BUTTON STYLES
+   ========================================== */
+
+/* Action Bar Button */
+.moe-generate-btn {
+    color: var(--smart-theme-body-color);
+    opacity: 0.7;
+    transition: opacity 0.2s, color 0.2s, transform 0.2s;
+    cursor: pointer;
+}
+
+.moe-generate-btn:hover {
+    opacity: 1;
+    color: #ff69b4;
+    transform: scale(1.1);
+}
+
+.moe-generate-btn.moe-generating {
+    opacity: 1;
+    color: #ffa500;
+}
+
+.moe-generate-btn.moe-always-visible {
+    opacity: 1 !important;
+}
+
+/* Floating Button on Message */
+.moe-floating-generate-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    background: var(--smart-theme-color, #6c5ce7);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 18px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s, background 0.2s;
+    z-index: 100;
+}
+
+.mes:hover .moe-floating-generate-btn,
+.moe-floating-generate-btn.moe-always-visible {
+    opacity: 1;
+}
+
+.moe-floating-generate-btn:hover {
+    transform: scale(1.1);
+    background: #ff69b4;
+}
+
+.moe-floating-generate-btn.moe-generating {
+    opacity: 1;
+    background: #ffa500;
+    animation: moe-pulse 1s infinite;
+}
+
+@keyframes moe-pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* Loading Indicator in Message */
+.moe-atelier-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--black50a) 0%, var(--black70a) 100%);
+    border-radius: 20px;
+    color: var(--smart-theme-body-color);
+    font-style: italic;
+    margin-top: 10px;
+    animation: pulse 1.5s infinite;
+    border: 1px solid var(--white30a);
+}
+
+.moe-atelier-loading::before {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--smart-theme-body-color);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: moe-spin 1s linear infinite;
+}
+
+@keyframes moe-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Settings Select Dropdown */
+.moe-atelier-settings select {
+    flex: 2;
+    background-color: var(--black50a);
+    border: 1px solid var(--white30a);
+    color: var(--smart-theme-body-color);
+    padding: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.moe-atelier-settings select:hover {
+    border-color: var(--smart-theme-color);
+}
+
+.moe-atelier-settings h4 {
+    margin: 15px 0 10px 0;
+    padding-top: 10px;
+    font-size: 14px;
+    color: var(--smart-theme-body-color, #e0e0e0);
+    opacity: 0.9;
+    border-top: 1px solid var(--white30a, rgba(255,255,255,0.2));
+}
+
+/* Compact setting items */
+.moe-atelier-setting-item {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 5px;
+    gap: 8px;
+}
+
+.moe-atelier-setting-item label {
+    flex: 1;
+    min-width: 120px;
+    font-size: 13px;
+}
+
+.moe-atelier-setting-item label small {
+    display: block;
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+/* Generated Image Click to Expand */
+.mes_text img {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mes_text img:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
